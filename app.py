@@ -187,30 +187,44 @@ MAIN_HTML = """
     .primary { background: var(--teal); color: #fff; border: 0; }
     .primary:hover { background: var(--teal-dark); }
     .primary:disabled { opacity: 0.55; cursor: not-allowed; }
-    main { width: min(1120px, calc(100% - 32px)); margin: 24px auto 40px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    main { width: min(1120px, calc(100% - 32px)); margin: 24px auto 40px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
+    .side { display: flex; flex-direction: column; gap: 20px; }
+    .block { display: flex; flex-direction: column; gap: 10px; }
+    main h2 { margin: 0; font-size: 18px; font-weight: 700; line-height: 1.3; }
     section { background: #fff; border: 1px solid var(--line); border-radius: 18px; padding: 20px; }
-    h2 { margin: 0 0 16px; font-size: 18px; }
-    .preview { position: relative; min-height: 360px; border-radius: 16px; background: #123; overflow: hidden; display: grid; place-items: center; }
-    .preview img { width: 100%; height: 420px; object-fit: cover; display: none; }
+    .preview { position: relative; height: 360px; border-radius: 16px; background: #123; overflow: hidden; cursor: pointer; }
+    .preview.dragover { box-shadow: inset 0 0 0 3px var(--teal); }
+    .preview img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; object-position: center; display: none; }
     .preview.has-image img { display: block; }
-    .upload-btn { position: absolute; top: 16px; left: 16px; display: inline-flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 10px; background: var(--teal); color: #fff; font-weight: 700; cursor: pointer; }
+    .upload-btn { position: absolute; top: 16px; left: 16px; z-index: 1; display: inline-flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 10px; background: var(--teal); color: #fff; font-weight: 700; cursor: pointer; }
     .preview.has-image .upload-btn { background: rgba(255,255,255,0.94); color: var(--ink); }
+    .drop-hint { position: absolute; left: 20px; right: 20px; bottom: 18px; color: rgba(255,255,255,0.9); font-size: 14px; text-align: center; pointer-events: none; }
+    .preview.has-image .drop-hint { display: none; }
     input[type="file"] { display: none; }
-    .actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
-    .guidelines { margin-top: 18px; color: var(--muted); font-size: 14px; }
+    .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 0; }
+    .actions .ghost, .actions .primary { width: 100%; height: 44px; }
+    .guidelines { margin: 0; color: var(--muted); font-size: 14px; }
     .guidelines strong { color: #be123c; }
     .guidelines ul { margin: 8px 0 0; padding-left: 18px; }
     .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-    .metric, .report { border: 1px solid var(--line); border-radius: 14px; background: var(--soft); padding: 12px; }
+    .metric { border: 1px solid var(--line); border-radius: 14px; background: var(--soft); padding: 12px; }
     .metric span, .kicker { display: block; color: var(--teal-dark); font-size: 13px; font-weight: 700; }
     .metric strong, #age { display: block; margin-top: 8px; font-size: 22px; }
     .meters { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
     .meter { border: 1px solid var(--line); border-radius: 14px; padding: 12px; }
     .meter label { display: flex; justify-content: space-between; font-size: 13px; font-weight: 700; color: var(--teal-dark); }
-    input[type="range"] { width: 100%; margin-top: 10px; accent-color: var(--teal); }
-    .report { margin-top: 14px; }
-    .report h3 { margin: 14px 0 6px; font-size: 16px; }
-    .report p { margin: 0; line-height: 1.5; }
+    input[type="range"] { --fill: 0%; -webkit-appearance: none; appearance: none; width: 100%; height: 18px; margin-top: 10px; background: transparent; pointer-events: none; }
+    input[type="range"]::-webkit-slider-runnable-track { height: 8px; border-radius: 999px; background: linear-gradient(to right, #11D9A1 var(--fill), #d7e6e3 var(--fill)); }
+    input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; margin-top: -5px; border: 0; border-radius: 50%; background: #11D9A1; }
+    input[type="range"]::-moz-range-track { height: 8px; border: 0; border-radius: 999px; background: #d7e6e3; }
+    input[type="range"]::-moz-range-progress { height: 8px; border-radius: 999px; background: #11D9A1; }
+    input[type="range"]::-moz-range-thumb { width: 18px; height: 18px; border: 0; border-radius: 50%; background: #11D9A1; }
+    .report-section .kicker { font-size: 16px; font-weight: 700; color: var(--ink); }
+    .report-section h3 { margin: 16px 0 6px; font-size: 16px; font-weight: 700; color: var(--ink); }
+    .report-section p { margin: 0; line-height: 1.5; }
+    .report-points { margin: 0; padding-left: 18px; font-size: 14px; line-height: 1.5; }
+    .report-points li + li { margin-top: 4px; }
+    .report-points strong { font-weight: 700; }
     .status { display: none; margin-bottom: 12px; padding: 10px 12px; border-radius: 10px; background: #fff7ed; color: #9a3412; }
     .status.show { display: block; }
     @media (max-width: 860px) { main, .metrics, .meters { grid-template-columns: 1fr; } }
@@ -225,28 +239,33 @@ MAIN_HTML = """
     <form method="post" action="{{ url_for('logout') }}"><button type="submit">Log out</button></form>
   </header>
   <main>
+    <div class="block">
+    <h2>1. Source Capture</h2>
     <section>
-      <h2>1. Source Capture</h2>
       <div class="preview" id="preview">
         <img id="photo" alt="Uploaded frontal face photo">
         <label class="upload-btn" for="file">Upload Frontal Face Photo</label>
+        <p class="drop-hint">Click anywhere in this area, or drag a photo here.</p>
         <input id="file" type="file" accept="image/jpeg,image/png,image/webp,image/gif">
       </div>
-      <div class="actions">
-        <button class="ghost" id="clear" type="button">Clear Image</button>
-        <button class="primary" id="analyze" type="button" disabled>Analyze Skin</button>
-      </div>
-      <div class="guidelines">
-        <strong>Guidelines for best results:</strong>
-        <ul>
-          <li>Capture the photo in bright, natural, neutral lighting.</li>
-          <li>Present a clean, makeup-free face facing front directly.</li>
-          <li>Ensure the photo is clear and well-focused.</li>
-        </ul>
-      </div>
     </section>
+    <div class="actions">
+      <button class="ghost" id="clear" type="button">Clear Image</button>
+      <button class="primary" id="analyze" type="button" disabled>Analyze Skin</button>
+    </div>
+    <div class="guidelines">
+      <strong>Guidelines for best results:</strong>
+      <ul>
+        <li>Capture the photo in bright, natural, neutral lighting.</li>
+        <li>Present a clean, makeup-free face facing front directly.</li>
+        <li>Ensure the photo is clear and well-focused.</li>
+      </ul>
+    </div>
+    </div>
+    <div class="side">
+    <div class="block">
+    <h2>2. Evaluation Results</h2>
     <section>
-      <h2>2. Evaluation Results</h2>
       <p class="status" id="status"></p>
       <div class="metrics">
         <div class="metric"><span>Skin Cleanliness</span><strong id="cleanliness">—</strong></div>
@@ -256,23 +275,33 @@ MAIN_HTML = """
       <div class="meters">
         <div class="meter">
           <label>Cleanliness Gage Meter <span id="cleanliness-num">0</span></label>
-          <input id="cleanliness-meter" type="range" min="0" max="10" step="0.1" value="0" disabled>
+          <input id="cleanliness-meter" type="range" min="0" max="10" step="0.1" value="0" tabindex="-1">
         </div>
         <div class="meter">
           <label>Quality Gage Meter <span id="quality-num">0</span></label>
-          <input id="quality-meter" type="range" min="0" max="10" step="0.1" value="0" disabled>
+          <input id="quality-meter" type="range" min="0" max="10" step="0.1" value="0" tabindex="-1">
         </div>
       </div>
-      <div class="report">
-        <h3>Professional Skincare Report</h3>
-        <p class="kicker">Overall Condition Summary</p>
-        <p id="description">Upload a photo and choose Analyze Skin. The result will appear here.</p>
-        <h3>1. Skin Cleanliness</h3>
-        <p id="cleanliness-review">—</p>
-        <h3>2. Skin Quality</h3>
-        <p id="quality-review">—</p>
-      </div>
     </section>
+    </div>
+    <div class="block">
+    <h2>3. Professional Skincare Report</h2>
+    <section class="report-section">
+      <p class="kicker">Overall Condition Summary</p>
+      <p id="description">Upload a photo and choose Analyze Skin. The result will appear here.</p>
+      <h3>1. Skin Cleanliness</h3>
+      <ul class="report-points">
+        <li><strong>KPI Rating:</strong> <span id="cleanliness-kpi">—</span></li>
+        <li><strong>Aesthetician Review:</strong> <span id="cleanliness-review">—</span></li>
+      </ul>
+      <h3>2. Skin Quality</h3>
+      <ul class="report-points">
+        <li><strong>KPI Rating:</strong> <span id="quality-kpi">—</span></li>
+        <li><strong>Aesthetician Review:</strong> <span id="quality-review">—</span></li>
+      </ul>
+    </section>
+    </div>
+    </div>
   </main>
   <script>
     const fileInput = document.getElementById("file");
@@ -291,7 +320,9 @@ MAIN_HTML = """
       const score = Number(value);
       document.getElementById(name).textContent = score.toFixed(1) + " / 10";
       document.getElementById(name + "-num").textContent = score.toFixed(1);
-      document.getElementById(name + "-meter").value = score;
+      const meter = document.getElementById(name + "-meter");
+      meter.value = score;
+      meter.style.setProperty("--fill", (score / 10) * 100 + "%");
     }
 
     function resetResults() {
@@ -299,12 +330,29 @@ MAIN_HTML = """
       document.getElementById("quality").textContent = "—";
       document.getElementById("age").textContent = "—";
       document.getElementById("description").textContent = "Upload a photo and choose Analyze Skin. The result will appear here.";
+      document.getElementById("cleanliness-kpi").textContent = "—";
+      document.getElementById("quality-kpi").textContent = "—";
       document.getElementById("cleanliness-review").textContent = "—";
       document.getElementById("quality-review").textContent = "—";
       setScore("cleanliness", 0);
       setScore("quality", 0);
       document.getElementById("cleanliness").textContent = "—";
       document.getElementById("quality").textContent = "—";
+    }
+
+    function isImageFile(file) {
+      return file.type.startsWith("image/") || /\\.(jpe?g|png|webp|gif)$/i.test(file.name);
+    }
+
+    function useFile(file) {
+      if (!isImageFile(file)) {
+        showStatus("Please use a JPG, PNG, WEBP, or GIF image.");
+        return;
+      }
+      const transfer = new DataTransfer();
+      transfer.items.add(file);
+      fileInput.files = transfer.files;
+      fileInput.dispatchEvent(new Event("change"));
     }
 
     fileInput.addEventListener("change", () => {
@@ -314,8 +362,29 @@ MAIN_HTML = """
       objectUrl = URL.createObjectURL(file);
       photo.src = objectUrl;
       preview.classList.add("has-image");
+      preview.classList.remove("dragover");
       analyze.disabled = false;
       showStatus("");
+    });
+
+    preview.addEventListener("click", (event) => {
+      if (event.target.closest(".upload-btn") || event.target === fileInput) return;
+      fileInput.click();
+    });
+
+    preview.addEventListener("dragenter", (event) => event.preventDefault());
+    preview.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      preview.classList.add("dragover");
+    });
+    preview.addEventListener("dragleave", (event) => {
+      if (!preview.contains(event.relatedTarget)) preview.classList.remove("dragover");
+    });
+    preview.addEventListener("drop", (event) => {
+      event.preventDefault();
+      preview.classList.remove("dragover");
+      const file = event.dataTransfer && event.dataTransfer.files[0];
+      if (file) useFile(file);
     });
 
     document.getElementById("clear").addEventListener("click", () => {
@@ -344,8 +413,10 @@ MAIN_HTML = """
         setScore("quality", data.quality);
         document.getElementById("age").textContent = data.estimated_age;
         document.getElementById("description").textContent = data.description;
-        document.getElementById("cleanliness-review").textContent = "KPI Rating: " + Number(data.cleanliness).toFixed(1) + " / 10. " + data.cleanliness_review;
-        document.getElementById("quality-review").textContent = "KPI Rating: " + Number(data.quality).toFixed(1) + " / 10. " + data.quality_review;
+        document.getElementById("cleanliness-kpi").textContent = Number(data.cleanliness).toFixed(1) + " / 10";
+        document.getElementById("cleanliness-review").textContent = data.cleanliness_review;
+        document.getElementById("quality-kpi").textContent = Number(data.quality).toFixed(1) + " / 10";
+        document.getElementById("quality-review").textContent = data.quality_review;
         showStatus("");
       } catch (error) {
         showStatus(error.message);
