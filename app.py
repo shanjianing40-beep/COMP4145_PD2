@@ -429,7 +429,7 @@ MAIN_HTML = """
     .recommend-link { display: block; width: 100%; margin: 0; padding: 14px 16px; border: 0; border-radius: 14px; background: #11D9A1; color: #08352f; font: inherit; font-size: 16px; font-weight: 700; text-align: left; cursor: pointer; }
     .report-section .recommend-link { margin-top: 16px; }
     .recommend-link:hover { background: #0ec892; }
-    .project-scroll, .history-scroll { max-height: calc(100vh - 180px); overflow-y: auto; }
+    .project-scroll, .history-scroll { max-height: calc(var(--screen, 100vh) - 180px); overflow-y: auto; }
     .project-scroll { display: flex; flex-direction: column; gap: 12px; padding-right: 4px; }
     .project-card { background: #fff; border: 1px solid var(--line); border-radius: 18px; padding: 16px; cursor: pointer; }
     .project-card.is-selected { border-color: #11D9A1; box-shadow: inset 0 0 0 1px #11D9A1; }
@@ -1154,6 +1154,17 @@ _SKIN_COMPONENT = None
 SKIN_BRIDGE = r"""
 <script>
 (function () {
+  function fitScreen() {
+    let screenHeight = window.innerHeight;
+    try {
+      if (window.parent && window.parent.parent && window.parent.parent.innerHeight) {
+        screenHeight = window.parent.parent.innerHeight;
+      }
+    } catch (error) {}
+    document.documentElement.style.setProperty("--screen", Math.max(screenHeight, 640) + "px");
+  }
+  fitScreen();
+  window.addEventListener("resize", fitScreen);
   const pending = {};
   const pageTag = Math.random().toString(36).slice(2);
   let seq = 0;
@@ -1249,23 +1260,26 @@ COMPONENT_PAGE = r"""
     let lastReply = "";
     let lastHeight = 0;
     let resizing = false;
+    function viewportHeight() {
+      return Math.max((window.parent && window.parent.innerHeight) || window.innerHeight || 800, 640);
+    }
     function resize() {
       if (resizing) return;
       resizing = true;
-      const viewport = Math.max((window.parent && window.parent.innerHeight) || 800, 640);
+      const viewport = viewportHeight();
       let height = viewport;
       try {
         const doc = frame.contentDocument;
-        if (doc && doc.body) {
+        if (doc && doc.body && screen !== "login") {
           const previous = doc.body.style.minHeight;
           doc.body.style.minHeight = "0px";
-          height = Math.max(doc.body.scrollHeight, doc.documentElement.scrollHeight, viewport);
+          height = Math.max(doc.body.scrollHeight, viewport);
           doc.body.style.minHeight = previous;
         }
       } catch (error) {}
+      frame.style.height = height + "px";
       if (Math.abs(height - lastHeight) >= 2) {
         lastHeight = height;
-        frame.style.height = height + "px";
         send("streamlit:setFrameHeight", { height: height });
       }
       resizing = false;
@@ -1290,6 +1304,13 @@ COMPONENT_PAGE = r"""
       if (args.screen !== screen || args.version !== version) {
         screen = args.screen;
         version = args.version || "";
+        lastHeight = 0;
+        if (screen === "login") {
+          const viewport = viewportHeight();
+          frame.style.height = viewport + "px";
+          send("streamlit:setFrameHeight", { height: viewport });
+          lastHeight = viewport;
+        }
         frame.srcdoc = pages[screen] || pages.login;
       }
       if (args.reply && args.reply.id && args.reply.id !== lastReply) {
@@ -1307,12 +1328,18 @@ COMPONENT_PAGE = r"""
 
 def _skin_component():
     global _SKIN_COMPONENT
-    if _SKIN_COMPONENT is None:
-        import streamlit.components.v1 as components
+    import streamlit.components.v1 as components
 
-        os.makedirs(COMPONENT_DIR, exist_ok=True)
-        with open(os.path.join(COMPONENT_DIR, "index.html"), "w", encoding="utf-8") as handle:
+    os.makedirs(COMPONENT_DIR, exist_ok=True)
+    target = os.path.join(COMPONENT_DIR, "index.html")
+    current = ""
+    if os.path.isfile(target):
+        with open(target, encoding="utf-8") as handle:
+            current = handle.read()
+    if current != COMPONENT_PAGE:
+        with open(target, "w", encoding="utf-8") as handle:
             handle.write(COMPONENT_PAGE)
+    if _SKIN_COMPONENT is None:
         _SKIN_COMPONENT = components.declare_component("skin_check", path=COMPONENT_DIR)
     return _SKIN_COMPONENT
 
