@@ -1147,5 +1147,322 @@ def history_image(record_id):
     return send_file(image_path)
 
 
+BEAUTY_PROJECTS = [
+    {"id": "hydra", "name": "HydraFacial Deep Cleanse", "price": 980, "effect": "Cleanliness jumps in the first two weeks, then levels off. Quality barely changes.", "clean": [1.4, 1.7, 1.7], "quality": [0.1, 0.2, 0.2]},
+    {"id": "acne", "name": "Medical Acne Control", "price": 1280, "effect": "Blemishes settle week by week, so cleanliness keeps climbing.", "clean": [0.4, 1.1, 2.0], "quality": [0.1, 0.2, 0.4]},
+    {"id": "peel", "name": "Clinical Chemical Peel", "price": 1680, "effect": "Quality dips while the skin recovers, then rises sharply.", "clean": [0.1, 0.4, 0.5], "quality": [-0.8, 1.2, 2.6]},
+    {"id": "laser", "name": "Pigment Laser Toning", "price": 2200, "effect": "Spots stay put at first. Quality jumps late in the course.", "clean": [0, 0.1, 0.2], "quality": [0.1, 0.5, 3.0]},
+    {"id": "rf", "name": "Radiofrequency Firming", "price": 2580, "effect": "Firmness builds slowly and is still improving at eight weeks.", "clean": [0, 0.1, 0.1], "quality": [0.4, 1.0, 1.8]},
+    {"id": "meso", "name": "Skin Booster Mesotherapy", "price": 1980, "effect": "Hydration lifts cleanliness and quality together.", "clean": [0.7, 1.2, 1.5], "quality": [0.8, 1.6, 2.2]},
+    {"id": "led", "name": "LED Repair Session", "price": 480, "effect": "Redness calms soon after the visit, then most of the gain fades.", "clean": [0.9, 0.4, 0.1], "quality": [0.2, 0.1, 0]},
+]
+
+
+def rank_projects(record):
+    cleanliness = float(record["cleanliness"])
+    quality = float(record["quality"])
+    priority = {
+        "hydra": 90 if cleanliness < 8 else 40,
+        "acne": 85 if cleanliness < 7.5 else 20,
+        "led": 70 if cleanliness < 8 else 55,
+        "peel": 100 if quality < 6 else 60 if quality < 7.5 else 30,
+        "laser": 95 if quality < 6.5 else 35,
+        "rf": 80 if quality < 7 else 50,
+        "meso": 75 if quality < 8 else 65,
+    }
+    return sorted(BEAUTY_PROJECTS, key=lambda item: (-priority[item["id"]], item["price"]))
+
+
+def forecast_series(start, steps):
+    values = [float(start)]
+    for step in steps:
+        values.append(min(10.0, max(0.0, round(values[0] + step, 1))))
+    return values
+
+
+def run_streamlit_app():
+    import pandas as pd
+    import streamlit as st
+
+    st.set_page_config(page_title="Skin Quality Check", layout="wide")
+    st.session_state.setdefault("user", None)
+    st.session_state.setdefault("show_register", False)
+    st.session_state.setdefault("account_created", False)
+    st.session_state.setdefault("sid", uuid.uuid4().hex)
+    st.session_state.setdefault("selected_id", "")
+    st.session_state.setdefault("picked_project", "")
+    st.session_state.setdefault("reserved_id", "")
+    st.session_state.setdefault("paid_message", "")
+    st.session_state.setdefault("page", "Home")
+    page_options = ["Home", "History", "Recommend"]
+    if st.session_state.page not in page_options:
+        st.session_state.page = "Home"
+
+    def sign_out():
+        if st.session_state.user == "demo":
+            forget_demo_session(st.session_state.sid)
+        for key in ("user", "result", "selected_id", "picked_project", "reserved_id", "paid_message"):
+            st.session_state[key] = None if key == "user" else ""
+        st.session_state.page = "Home"
+
+    def open_recommend():
+        st.session_state.page = "Recommend"
+
+    if not st.session_state.user:
+        st.title("Skin Quality Check")
+        if st.session_state.show_register:
+            st.subheader("Create an account")
+            if st.session_state.account_created:
+                st.success("Account created. Click Back to sign in.")
+            else:
+                st.caption("A new account starts with an empty history. Uploads stay with this username.")
+                with st.form("register"):
+                    new_name = st.text_input("Username")
+                    new_password = st.text_input("Password", type="password")
+                    confirm = st.text_input("Confirm password", type="password")
+                    create = st.form_submit_button("Create account")
+                if create:
+                    users = load_users()
+                    if not USERNAME_RE.fullmatch(new_name.strip()):
+                        st.error("Username must be 1–32 characters: letters, numbers, _ or -.")
+                    elif len(new_password) < 4:
+                        st.error("Password must be at least 4 characters.")
+                    elif new_password != confirm:
+                        st.error("The two passwords do not match.")
+                    elif new_name.strip() in users:
+                        st.error("That username is already registered.")
+                    else:
+                        users[new_name.strip()] = new_password
+                        save_users(users)
+                        st.session_state.account_created = True
+                        st.rerun()
+            if st.button("Back"):
+                st.session_state.show_register = False
+                st.session_state.account_created = False
+                st.rerun()
+            return
+
+        st.caption("Sign in to upload a frontal face photo.")
+        with st.form("login"):
+            username = st.text_input("Username")
+            password = st.text_input("Password", type="password")
+            submitted = st.form_submit_button("Sign in")
+        if submitted:
+            if load_users().get(username.strip()) == password:
+                st.session_state.user = username.strip()
+                if username.strip() == "demo":
+                    st.session_state.sid = uuid.uuid4().hex
+                st.rerun()
+            else:
+                st.error("Incorrect username or password.")
+        if st.button("Create a new account"):
+            st.session_state.show_register = True
+            st.session_state.account_created = False
+            st.rerun()
+        st.caption("Demo account: username **demo**, password **demo**")
+        return
+
+    top_left, top_right = st.columns([3, 1])
+    top_left.title("Skin Quality Check")
+    top_left.caption(f"Signed in as {st.session_state.user}")
+    if top_right.button("Log out", on_click=sign_out):
+        pass
+    st.radio("Section", page_options, horizontal=True, key="page", label_visibility="collapsed")
+    records = list_history(st.session_state.user, st.session_state.sid)
+    if st.session_state.selected_id and not any(item["id"] == st.session_state.selected_id for item in records):
+        st.session_state.selected_id = ""
+
+    def selected_record():
+        for item in records:
+            if item["id"] == st.session_state.selected_id:
+                return item
+        return records[-1] if records else None
+
+    if st.session_state.page == "Home":
+        left, right = st.columns(2)
+        with left:
+            st.subheader("1. Source Capture")
+            upload = st.file_uploader("Upload Frontal Face Photo", type=["jpg", "jpeg", "png", "webp", "gif"])
+            if st.button("Analyze Skin", type="primary", disabled=upload is None):
+                ext = os.path.splitext(upload.name)[1].lower()
+                mime = MIME_TYPES.get(ext)
+                image_bytes = upload.getvalue()
+                try:
+                    data = extract_json(call_llm(image_bytes, mime))
+                    result = {
+                        "cleanliness": as_score(data["cleanliness"]),
+                        "quality": as_score(data["quality"]),
+                        "estimated_age": str(data["estimated_age"]),
+                        "description": str(data["description"]),
+                        "cleanliness_review": str(data["cleanliness_review"]),
+                        "quality_review": str(data["quality_review"]),
+                        "tips_summary": str(data["tips_summary"]),
+                        "tips": as_tips(data["tips"]),
+                        "treatment": as_points(data.get("treatment")),
+                    }
+                    saved = save_history(
+                        st.session_state.user,
+                        image_bytes,
+                        ext,
+                        result,
+                        session_id=st.session_state.sid if st.session_state.user == "demo" else None,
+                    )
+                    st.session_state.result = result
+                    st.session_state.selected_id = saved["id"]
+                    st.rerun()
+                except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+                    st.error("The model response could not be read as the expected skin report.")
+                except RuntimeError as exc:
+                    st.error(str(exc))
+        result = st.session_state.get("result")
+        with right:
+            st.subheader("2. Evaluation Results")
+            if not result:
+                st.info("Upload a photo and choose Analyze Skin.")
+            else:
+                score_cols = st.columns(3)
+                score_cols[0].metric("Skin Cleanliness", f"{result['cleanliness']:.1f} / 10")
+                score_cols[1].metric("Skin Quality", f"{result['quality']:.1f} / 10")
+                score_cols[2].metric("Estimated Age", result["estimated_age"])
+                st.subheader("3. Professional Skincare Report")
+                st.write(result["description"])
+                st.markdown("**1. Skin Cleanliness**")
+                st.markdown(f"- **KPI Rating:** {result['cleanliness']:.1f} / 10")
+                st.markdown(f"- **Aesthetician Review:** {result['cleanliness_review']}")
+                st.markdown("**2. Skin Quality**")
+                st.markdown(f"- **KPI Rating:** {result['quality']:.1f} / 10")
+                st.markdown(f"- **Aesthetician Review:** {result['quality_review']}")
+                st.subheader("4. Skincare Tips")
+                st.write(result["tips_summary"])
+                for index, group in enumerate(result["tips"], start=1):
+                    st.markdown(f"**{index}. {group['title']}**")
+                    for point in group["points"]:
+                        st.markdown(f"- {point}")
+                st.button("What skin treatment program can improve...", on_click=open_recommend)
+
+    elif st.session_state.page == "History":
+        left, right = st.columns(2)
+        with left:
+            st.subheader("Skin History")
+            if not records:
+                st.info("Each analyzed photo on Home becomes a point on this chart.")
+            else:
+                frame = pd.DataFrame(
+                    {
+                        "time": [item["created_at"].replace("T", " ") for item in records],
+                        "Skin Cleanliness": [item["cleanliness"] for item in records],
+                        "Skin Quality": [item["quality"] for item in records],
+                    }
+                ).set_index("time")
+                try:
+                    st.line_chart(frame, color=["#11D9A1", "#1f6f8b"])
+                except TypeError:
+                    st.line_chart(frame)
+                st.button("What skin treatment program can improve...", on_click=open_recommend)
+        with right:
+            st.subheader("Selected Record")
+            if not records:
+                st.info("Click a time after an analysis is saved.")
+            else:
+                labels = [item["created_at"].replace("T", " ") for item in records]
+                current = next((item["created_at"].replace("T", " ") for item in records if item["id"] == st.session_state.selected_id), labels[-1])
+                chosen = st.selectbox("Time", labels, index=labels.index(current))
+                record = records[labels.index(chosen)]
+                st.session_state.selected_id = record["id"]
+                image_path = os.path.join(HISTORY_DIR, st.session_state.user, record["image"])
+                if os.path.isfile(image_path):
+                    st.image(image_path, use_container_width=True)
+                st.write(f"Cleanliness {float(record['cleanliness']):.1f} / 10 · Quality {float(record['quality']):.1f} / 10")
+                st.write(record.get("tips_summary") or "")
+                for index, group in enumerate(record.get("tips") or [], start=1):
+                    st.markdown(f"**{index}. {group.get('title') or 'Tip'}**")
+                    for point in group.get("points") or []:
+                        st.markdown(f"- {point}")
+
+    else:
+        record = selected_record()
+        left, right = st.columns(2)
+        with left:
+            st.subheader("Medical Beauty Projects")
+            if not record:
+                st.info("Choose a time on History first.")
+            else:
+                st.caption(f"{record['created_at'].replace('T', ' ')} · Cleanliness {float(record['cleanliness']):.1f} / 10 · Quality {float(record['quality']):.1f} / 10")
+                for project in rank_projects(record):
+                    with st.container(border=True):
+                        st.markdown(f"**{project['name']}**")
+                        st.write(project["effect"])
+                        st.markdown(f"**HK${project['price']}**")
+                        pick, reserve = st.columns(2)
+                        if pick.button("View effect", key=f"pick-{project['id']}"):
+                            st.session_state.picked_project = project["id"]
+                            st.session_state.reserved_id = ""
+                            st.rerun()
+                        if reserve.button("Reservation", key=f"reserve-{project['id']}"):
+                            st.session_state.picked_project = project["id"]
+                            st.session_state.reserved_id = project["id"]
+                            st.rerun()
+        with right:
+            st.subheader("Predicted Effect")
+            project = next((item for item in BEAUTY_PROJECTS if item["id"] == st.session_state.picked_project), None)
+            if not record or not project:
+                st.info("Click a project to see its predicted effect.")
+            else:
+                times = ["Now", "2 weeks", "4 weeks", "8 weeks"]
+                forecast = pd.DataFrame(
+                    {
+                        "Skin Cleanliness": forecast_series(record["cleanliness"], project["clean"]),
+                        "Skin Quality": forecast_series(record["quality"], project["quality"]),
+                    },
+                    index=times,
+                )
+                try:
+                    st.line_chart(forecast, color=["#11D9A1", "#1f6f8b"])
+                except TypeError:
+                    st.line_chart(forecast)
+                st.caption(f"{project['name']}. {project['effect']}")
+                if st.session_state.reserved_id == project["id"]:
+                    st.subheader("Reservation")
+                    with st.form("reservation"):
+                        day = st.date_input("Date")
+                        clock = st.selectbox("Time", ["10:00", "11:30", "14:00", "15:30", "17:00"])
+                        st.write(f"Amount to pay: HK${project['price']}")
+                        pay = st.form_submit_button("Pay")
+                    if pay:
+                        st.session_state.paid_message = (
+                            f"Reserved {project['name']} on {day.isoformat()} at {clock}. "
+                            f"Payment of HK${project['price']} received."
+                        )
+                        st.rerun()
+
+    if st.session_state.paid_message:
+        @st.dialog("Reservation")
+        def payment_alert(message):
+            st.write(message)
+            if st.button("OK"):
+                st.session_state.paid_message = ""
+                st.rerun()
+
+        payment_alert(st.session_state.paid_message)
+
+
+def _running_in_streamlit():
+    try:
+        from streamlit.runtime.scriptrunner import get_script_run_ctx
+
+        try:
+            context = get_script_run_ctx(suppress_warning=True)
+        except TypeError:
+            context = get_script_run_ctx()
+        return context is not None
+    except Exception:
+        return False
+
+
+if _running_in_streamlit():
+    run_streamlit_app()
+
+
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5000, debug=True)
+    if not _running_in_streamlit():
+        app.run(host="127.0.0.1", port=5000, debug=True)
