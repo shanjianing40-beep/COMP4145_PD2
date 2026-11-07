@@ -1148,4 +1148,20 @@ def history_image(record_id):
 
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5000, debug=True)
+    # Streamlit Cloud executes this file, but it only serves Streamlit apps.
+    in_streamlit = False
+    try:
+        from streamlit.runtime.scriptrunner import get_script_run_ctx
+
+        in_streamlit = get_script_run_ctx() is not None
+    except Exception:
+        in_streamlit = False
+    if in_streamlit:
+        import streamlit as st
+
+        st.title("Skin Quality Check")
+        st.write("This project is a Flask app. Run the command below on your own computer, then open the local address.")
+        st.code("python app.py", language="bash")
+        st.write("Local address: http://127.0.0.1:5000")
+    else:
+        app.run(host="127.0.0.1", port=5000, debug=True)
