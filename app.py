@@ -122,26 +122,78 @@ def safe_name(value, pattern):
     return None
 
 
+def _cloud_users_path():
+    # Streamlit Community Cloud keeps the app under /mount/src and restores that
+    # folder from Git whenever the container sleeps or restarts. New accounts are
+    # stored outside the repo so a write does not touch the deployed source.
+    script = os.path.abspath(__file__).replace("\\", "/")
+    if "/mount/src/" not in script:
+        return None
+    return os.path.join(tempfile.gettempdir(), "skin_check_users.json")
+
+
+def _read_users_into(users, path):
+    if not path or not os.path.isfile(path):
+        return
+    try:
+        with open(path, encoding="utf-8") as handle:
+            stored = json.load(handle)
+        if isinstance(stored, dict):
+            for name, password in stored.items():
+                if USERNAME_RE.fullmatch(str(name)) and isinstance(password, str) and str(name) != "demo":
+                    users[str(name)] = password
+    except (OSError, json.JSONDecodeError):
+        pass
+
+
 def load_users():
     users = dict(DEMO_USERS)
-    if os.path.isfile(USERS_PATH):
-        try:
-            with open(USERS_PATH, encoding="utf-8") as handle:
-                stored = json.load(handle)
-            if isinstance(stored, dict):
-                for name, password in stored.items():
-                    if USERNAME_RE.fullmatch(str(name)) and isinstance(password, str) and str(name) != "demo":
-                        users[str(name)] = password
-        except (OSError, json.JSONDecodeError):
-            pass
+    _read_users_into(users, USERS_PATH)
+    _read_users_into(users, _cloud_users_path())
     return users
 
 
 def save_users(users):
     stored = {name: password for name, password in users.items() if name != "demo"}
-    with open(USERS_PATH, "w", encoding="utf-8") as handle:
-        json.dump(stored, handle, indent=2)
-        handle.write("\n")
+    path = _cloud_users_path() or USERS_PATH
+    try:
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(stored, handle, indent=2)
+            handle.write("\n")
+    except OSError:
+        pass
+
+
+def _remembered_password(payload, username):
+    saved = payload.get("saved_users")
+    if isinstance(saved, str):
+        try:
+            saved = json.loads(saved)
+        except json.JSONDecodeError:
+            return None
+    if not isinstance(saved, dict):
+        return None
+    password = saved.get(username)
+    return password if isinstance(password, str) else None
+
+
+def _login_matches(username, password, remembered=None):
+    users = load_users()
+    if users.get(username) == password:
+        return True
+    # The cloud disk is wiped when the site restarts. The same browser sends the
+    # account it registered, and a matching password is written back.
+    if (
+        username not in users
+        and username != "demo"
+        and remembered == password
+        and len(password) >= 4
+        and USERNAME_RE.fullmatch(username or "")
+    ):
+        users[username] = password
+        save_users(users)
+        return True
+    return False
 
 
 def history_folder(username):
@@ -1059,7 +1111,7 @@ def login():
                 users[username] = password
                 save_users(users)
                 return redirect(url_for("login", created=1))
-        elif users.get(username) == password:
+        elif _login_matches(username, password):
             session.clear()
             session["user"] = username
             if username == "demo":
@@ -1205,6 +1257,30 @@ SKIN_BRIDGE = r"""
       json: async () => reply.body
     });
   });
+  function readAccounts() {
+    try {
+      const data = JSON.parse(localStorage.getItem("skin_users") || "{}");
+      return data && typeof data === "object" ? data : {};
+    } catch (error) {
+      return {};
+    }
+  }
+  function keepRegisteredAccount() {
+    let pendingAccount = null;
+    try { pendingAccount = JSON.parse(localStorage.getItem("skin_pending_user") || "null"); } catch (error) {}
+    const created = document.querySelector("#register-form .notice");
+    const failed = document.querySelector("#register-form .error");
+    if (pendingAccount && created && pendingAccount.username && pendingAccount.password) {
+      const accounts = readAccounts();
+      accounts[pendingAccount.username] = pendingAccount.password;
+      try { localStorage.setItem("skin_users", JSON.stringify(accounts)); } catch (error) {}
+      try { localStorage.removeItem("skin_pending_user"); } catch (error) {}
+    } else if (failed) {
+      try { localStorage.removeItem("skin_pending_user"); } catch (error) {}
+    }
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", keepRegisteredAccount);
+  else keepRegisteredAccount();
   document.addEventListener("submit", (event) => {
     const form = event.target;
     if (!form || !form.getAttribute) return;
@@ -1215,6 +1291,15 @@ SKIN_BRIDGE = r"""
     event.preventDefault();
     const payload = {};
     new FormData(form).forEach((value, key) => { payload[key] = value; });
+    if (form.id === "register-form") {
+      try {
+        localStorage.setItem("skin_pending_user", JSON.stringify({
+          username: String(payload.username || "").trim(),
+          password: String(payload.password || "")
+        }));
+      } catch (error) {}
+    }
+    if (form.id === "login-form") payload.saved_users = readAccounts();
     const id = nextId();
     window.parent.postMessage({
       source: "skin-app",
@@ -1399,8 +1484,8 @@ def _handle_skin_event(event):
             users[username] = password
             save_users(users)
             return {"created": True, "register_error": None, "login_error": None}
-        users = load_users()
-        if users.get(username) == password:
+        remembered = _remembered_password(payload, username)
+        if _login_matches(username, password, remembered):
             return {"user": username, "screen": "app", "sid": uuid.uuid4().hex if username == "demo" else st_sid(), "login_error": None, "register_error": None}
         return {"login_error": "Incorrect username or password.", "register_error": None}
     if path == "/analyze":
